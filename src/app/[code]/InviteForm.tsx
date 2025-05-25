@@ -1,10 +1,13 @@
-// src/app/[code]/InviteForm.tsx
 "use client";
 
 import { useState, FormEvent, useEffect } from "react";
 
 interface InviteFormProps {
   code: string;
+}
+
+interface ErrorResponse {
+  detail?: string;
 }
 
 export default function InviteForm({ code }: InviteFormProps) {
@@ -17,14 +20,12 @@ export default function InviteForm({ code }: InviteFormProps) {
     console.log("Client Component 收到的 code：", code);
   }, [code]);
 
-  // 简单邮箱正则
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    // 1. 本地校验邮箱格式
     if (!EMAIL_REGEX.test(email)) {
       setError("请输入有效的邮箱地址");
       return;
@@ -35,29 +36,29 @@ export default function InviteForm({ code }: InviteFormProps) {
     try {
       const res = await fetch("https://overapi.shayudata.com/api/v1/invite", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ email, card: code })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, card: code }),
       });
 
       if (!res.ok) {
-        // 尝试解析并显示后端返回的 detail
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.detail || res.statusText);
+        // 解析后端可能的 { detail: string } 响应
+        const data = (await res.json().catch(() => ({} as ErrorResponse))) as ErrorResponse;
+        throw new Error(data.detail ?? res.statusText);
       }
 
-      // 成功
       setSuccess(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || "请求失败，请重试");
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("请求失败，请重试");
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // 如果已成功发送
   if (success) {
     return (
       <div className="max-w-md mx-auto bg-green-50 border border-green-200 rounded-2xl p-6 text-green-800">
