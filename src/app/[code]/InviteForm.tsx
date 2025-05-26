@@ -94,12 +94,18 @@ export default function InviteForm({ code }: InviteFormProps) {
         {error && <p className="text-red-600 text-sm">{error}</p>}
 
         <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? "处理中…" : "升级会员"}
-        </button>
+  className="px-4 py-2 rounded text-white"
+  style={{
+    backgroundColor: loading ? "#999" : "#2563eb",
+    color: "#fff",
+    fontWeight: 600,
+    fontSize: "16px",
+    border: "none"
+  }}
+  disabled={loading}
+>
+  {loading ? "处理中…" : "点击升级"}
+</button>
       </form>
       <p className="mt-4 text-xs text-gray-500 text-center">
         您的卡密：<span className="font-mono text-indigo-600">{code}</span>
