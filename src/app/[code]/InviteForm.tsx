@@ -35,18 +35,24 @@ export default function InviteForm({ code }: InviteFormProps) {
   const detectCardStatus = async () => {
     setDetecting(true);
     setError(null);
-    
+
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/v1/invite/detect?card=${encodeURIComponent(code)}`);
-      
+      const res = await fetch(
+        `https://overleafv2.shayudata.com/api/v1/invite/detect?card=${encodeURIComponent(
+          code
+        )}`
+      );
+
       if (!res.ok) {
-        const data = (await res.json().catch(() => ({} as ErrorResponse))) as ErrorResponse;
+        const data = (await res
+          .json()
+          .catch(() => ({} as ErrorResponse))) as ErrorResponse;
         throw new Error(data.detail ?? res.statusText);
       }
-      
-      const data = await res.json() as CardDetectResponse;
+
+      const data = (await res.json()) as CardDetectResponse;
       setCardStatus(data);
-      
+
       // 如果是重新激活模式，设置默认邮箱
       if (data.mode === "reactivate" && data.email) {
         setEmail(data.email);
@@ -79,25 +85,36 @@ export default function InviteForm({ code }: InviteFormProps) {
 
     try {
       let res;
-      
+
       if (cardStatus?.mode === "reactivate") {
-        // 重新激活模式
-        res = await fetch("http://127.0.0.1:8000/api/v1/invite/reactivate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ card: code }),
-        });
+        // 重新激活模式（虽然现在前端没有按钮，但逻辑保留）
+        res = await fetch(
+          "https://overleafv2.shayudata.com/api/v1/invite/reactivate",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ card: code }),
+          }
+        );
       } else {
         // 新邀请模式
-        res = await fetch("http://127.0.0.1:8000/api/v1/invite", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: email.toLowerCase(), card: code }),
-        });
+        res = await fetch(
+          "https://overleafv2.shayudata.com/api/v1/invite",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: email.toLowerCase(),
+              card: code,
+            }),
+          }
+        );
       }
 
       if (!res.ok) {
-        const data = (await res.json().catch(() => ({} as ErrorResponse))) as ErrorResponse;
+        const data = (await res
+          .json()
+          .catch(() => ({} as ErrorResponse))) as ErrorResponse;
         throw new Error(data.detail ?? res.statusText);
       }
 
@@ -128,10 +145,11 @@ export default function InviteForm({ code }: InviteFormProps) {
 
   // 成功状态
   if (success) {
-    const message = cardStatus?.mode === "reactivate" 
-      ? "🎉 会员已成功更新！" 
-      : "🎉 邀请已发送成功！请检查你的邮箱。";
-    
+    const message =
+      cardStatus?.mode === "reactivate"
+        ? "🎉 会员已成功更新！"
+        : "🎉 邀请已发送成功！请检查你的邮箱。";
+
     return (
       <div className="max-w-md mx-auto bg-green-50 border border-green-200 rounded-2xl p-6 text-green-800">
         {message}
@@ -139,23 +157,26 @@ export default function InviteForm({ code }: InviteFormProps) {
     );
   }
 
-  // 重新激活模式界面
+  // 重新激活模式界面（❌ 已删除更新会员按钮）
   if (cardStatus?.mode === "reactivate") {
     return (
       <div className="max-w-md mx-auto bg-white shadow-lg rounded-2xl p-6 ring-1 ring-gray-200">
         <h2 className="text-xl font-semibold mb-4 text-gray-800">
-          更新会员权限
+          会员信息
         </h2>
-        
+
         <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-800 mb-2">
-            <strong>当前升级邮箱：</strong>{cardStatus.email}
+            <strong>当前升级邮箱：</strong>
+            {cardStatus.email}
           </p>
+
           {cardStatus.remaining_days && (
             <p className="text-sm text-blue-600">
               剩余权益：{cardStatus.remaining_days} 天
             </p>
           )}
+
           {cardStatus.message && (
             <p className="text-sm text-blue-600 mt-1">
               {cardStatus.message}
@@ -163,37 +184,23 @@ export default function InviteForm({ code }: InviteFormProps) {
           )}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+        {error && <p className="text-red-600 text-sm">{error}</p>}
 
-          <button
-            className="w-full px-4 py-2 rounded text-white"
-            style={{
-              backgroundColor: loading ? "#999" : "#059669",
-              color: "#fff",
-              fontWeight: 600,
-              fontSize: "16px",
-              border: "none"
-            }}
-            disabled={loading || !cardStatus.can_reactivate}
-          >
-            {loading ? "更新中…" : "更新会员"}
-          </button>
-        </form>
-        
         <p className="mt-4 text-xs text-gray-500 text-center">
-          您的卡密：<span className="font-mono text-indigo-600">{code}</span>
+          您的卡密：
+          <span className="font-mono text-indigo-600 ml-1">{code}</span>
         </p>
       </div>
     );
   }
 
-  // 新邀请模式界面
+  // 新邀请模式界面（保持原样）
   return (
     <div className="max-w-md mx-auto bg-white shadow-lg rounded-2xl p-6 ring-1 ring-gray-200">
       <h2 className="text-xl font-semibold mb-4 text-gray-800">
         输入你自己的 Overleaf 账户邮箱号
       </h2>
+
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>
           <label
@@ -219,18 +226,19 @@ export default function InviteForm({ code }: InviteFormProps) {
           className="w-full px-4 py-2 rounded text-white"
           style={{
             backgroundColor: loading ? "#999" : "#2563eb",
-            color: "#fff",
             fontWeight: 600,
             fontSize: "16px",
-            border: "none"
+            border: "none",
           }}
           disabled={loading}
         >
           {loading ? "处理中…" : "点击升级"}
         </button>
       </form>
+
       <p className="mt-4 text-xs text-gray-500 text-center">
-        您的卡密：<span className="font-mono text-indigo-600">{code}</span>
+        您的卡密：
+        <span className="font-mono text-indigo-600 ml-1">{code}</span>
       </p>
     </div>
   );
