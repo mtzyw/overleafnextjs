@@ -1,6 +1,11 @@
 "use client";
 
 import { useState, FormEvent, useEffect } from "react";
+import { formatInviteExpiry, resolveInviteSuccess } from "./inviteResult";
+import type {
+  InviteResponsePayload,
+  InviteSuccessState,
+} from "./inviteResult";
 
 interface InviteFormProps {
   code: string;
@@ -19,13 +24,92 @@ interface CardDetectResponse {
   message?: string;
 }
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_REVIEW_MESSAGE = "请检查邮箱格式是否正确";
+
+const INVALID_TLD_SUGGESTIONS: Record<string, string> = {
+  con: "com",
+  cmo: "com",
+  ocm: "com",
+  coom: "com",
+  conm: "com",
+  cm: "com",
+  xom: "com",
+  vom: "com",
+  comm: "com",
+  nett: "net",
+  nete: "net",
+  ogr: "org",
+  rog: "org",
+};
+
+const DOMAIN_SUGGESTIONS: Record<string, string> = {
+  "gmai.com": "gmail.com",
+  "gmial.com": "gmail.com",
+  "gamil.com": "gmail.com",
+  "gmail.con": "gmail.com",
+  "gmail.cmo": "gmail.com",
+  "gmail.ocm": "gmail.com",
+  "gmail.co": "gmail.com",
+  "gmail.cm": "gmail.com",
+  "gmailcom.com": "gmail.com",
+  "googlemail.con": "googlemail.com",
+  "hotmial.com": "hotmail.com",
+  "hotmai.com": "hotmail.com",
+  "hotmail.con": "hotmail.com",
+  "outlok.com": "outlook.com",
+  "outllok.com": "outlook.com",
+  "outlook.con": "outlook.com",
+  "qq.con": "qq.com",
+  "163.con": "163.com",
+  "126.con": "126.com",
+  "icloud.con": "icloud.com",
+  "foxmail.con": "foxmail.com",
+  "yahoo.con": "yahoo.com",
+};
+
+function getEmailReviewMessage(value: string): string | null {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (!EMAIL_REGEX.test(normalized)) {
+    return EMAIL_REVIEW_MESSAGE;
+  }
+
+  const [, domain = ""] = normalized.split("@");
+  const domainParts = domain.split(".");
+  const tld = domainParts[domainParts.length - 1] ?? "";
+
+  if (!/^[a-z]{2,24}$/.test(tld)) {
+    return EMAIL_REVIEW_MESSAGE;
+  }
+
+  const suggestedDomain = DOMAIN_SUGGESTIONS[domain];
+  if (suggestedDomain) {
+    return EMAIL_REVIEW_MESSAGE;
+  }
+
+  const suggestedTld = INVALID_TLD_SUGGESTIONS[tld];
+  if (suggestedTld) {
+    return EMAIL_REVIEW_MESSAGE;
+  }
+
+  return null;
+}
+
 export default function InviteForm({ code }: InviteFormProps) {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<boolean>(false);
+  const [successState, setSuccessState] = useState<InviteSuccessState | null>(
+    null
+  );
   const [cardStatus, setCardStatus] = useState<CardDetectResponse | null>(null);
   const [detecting, setDetecting] = useState(true);
+  const emailReviewMessage =
+    cardStatus?.mode === "new_invite" ? getEmailReviewMessage(email) : null;
 
   useEffect(() => {
     console.log("Client Component 收到的 code：", code);
@@ -38,7 +122,7 @@ export default function InviteForm({ code }: InviteFormProps) {
 
     try {
       const res = await fetch(
-        `https://overleafv2.shayudata.com/api/v1/invite/detect?card=${encodeURIComponent(
+        `/api/v1/invite/detect?card=${encodeURIComponent(
           code
         )}`
       );
@@ -69,16 +153,17 @@ export default function InviteForm({ code }: InviteFormProps) {
     }
   };
 
-  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
 
     // 新邀请模式需要验证邮箱
-    if (cardStatus?.mode === "new_invite" && !EMAIL_REGEX.test(email)) {
-      setError("请输入有效的邮箱地址");
-      return;
+    if (cardStatus?.mode === "new_invite") {
+      const emailMessage = getEmailReviewMessage(email);
+      if (emailMessage) {
+        setError(emailMessage);
+        return;
+      }
     }
 
     setLoading(true);
@@ -89,7 +174,7 @@ export default function InviteForm({ code }: InviteFormProps) {
       if (cardStatus?.mode === "reactivate") {
         // 重新激活模式（虽然现在前端没有按钮，但逻辑保留）
         res = await fetch(
-          "https://overleafv2.shayudata.com/api/v1/invite/reactivate",
+          "/api/v1/invite/reactivate",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -99,12 +184,12 @@ export default function InviteForm({ code }: InviteFormProps) {
       } else {
         // 新邀请模式
         res = await fetch(
-          "https://overleafv2.shayudata.com/api/v1/invite",
+          "/api/v1/invite",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              email: email.toLowerCase(),
+              email: email.trim().toLowerCase(),
               card: code,
             }),
           }
@@ -118,7 +203,8 @@ export default function InviteForm({ code }: InviteFormProps) {
         throw new Error(data.detail ?? res.statusText);
       }
 
-      setSuccess(true);
+      const data = (await res.json()) as InviteResponsePayload;
+      setSuccessState(resolveInviteSuccess(data));
     } catch (err: unknown) {
       console.error(err);
       if (err instanceof Error) {
@@ -144,15 +230,33 @@ export default function InviteForm({ code }: InviteFormProps) {
   }
 
   // 成功状态
-  if (success) {
-    const message =
-      cardStatus?.mode === "reactivate"
-        ? "🎉 会员已成功更新！"
-        : "🎉 邀请已发送成功！请检查你的邮箱。";
+  if (successState) {
+    const expiry =
+      successState.kind === "invitation_sent"
+        ? null
+        : formatInviteExpiry(successState.expiresAt);
+    const content =
+      successState.kind === "membership_extension"
+        ? {
+            title: "会员已自动续期成功",
+            detail: expiry
+              ? `新的到期时间：${expiry}。本次续期已直接完成，无需接受新的邀请。`
+              : "会员权益已直接延长，本次续期无需接受新的邀请。",
+          }
+        : successState.kind === "migration_started"
+          ? {
+              title: "迁移邀请已发送",
+              detail: "请检查邮箱并接受新的 Overleaf 邀请，完成账号迁移。",
+            }
+          : {
+              title: "邀请已发送成功",
+              detail: "请检查你的邮箱并接受新的 Overleaf 邀请。",
+            };
 
     return (
       <div className="max-w-md mx-auto bg-green-50 border border-green-200 rounded-2xl p-6 text-green-800">
-        {message}
+        <p className="font-semibold">{content.title}</p>
+        <p className="mt-3 text-sm leading-6">{content.detail}</p>
       </div>
     );
   }
@@ -218,6 +322,11 @@ export default function InviteForm({ code }: InviteFormProps) {
             required
             className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
           />
+          {emailReviewMessage && (
+            <p className="mt-2 text-sm text-amber-600">
+              {emailReviewMessage}
+            </p>
+          )}
         </div>
 
         {error && <p className="text-red-600 text-sm">{error}</p>}
